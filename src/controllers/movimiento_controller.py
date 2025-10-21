@@ -70,3 +70,31 @@ class MovimientoController:
         except Exception as e:
             print(f"Error al obtener movimientos: {e}")
             return []
+    
+    @staticmethod
+    def registrar_entrada(movimiento):
+        """
+        Registra una entrada de material y actualiza la cantidad en la tabla de materiales.
+        Args:
+            movimiento: Diccionario con los datos del movimiento
+        Returns:
+            (bool, str): True y mensaje si todo ok, False y mensaje si error
+        """
+        # Validar material
+        material = MaterialController.get_by_id(movimiento["id_material"])
+        if not material:
+            return False, "Material no encontrado."
+        # Actualizar cantidad sumando la entrada
+        cantidad_actual = material[4]
+        nueva_cantidad = cantidad_actual + movimiento["cantidad"]
+        actualizado = MaterialController.update_cantidad(movimiento["id_material"], nueva_cantidad)
+        if not actualizado:
+            return False, "No se pudo actualizar la cantidad del material."
+        # Registrar movimiento (agregar campos nulos para entrada)
+        movimiento["id_obra"] = None
+        movimiento["id_contratista"] = None
+        registrado = MovimientoModel.insert_entrada(movimiento)
+        if registrado:
+            return True, "Entrada registrada correctamente."
+        else:
+            return False, "No se pudo registrar el movimiento."

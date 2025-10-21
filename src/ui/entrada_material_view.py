@@ -8,6 +8,9 @@ from PyQt6.QtCore import Qt, QDate, QSize, QTimer
 from ui.styles.common_styles import (INPUT_STYLE, SPINBOX_STYLE, COMBO_STYLE, DATE_STYLE,
                                    BUTTON_PRIMARY_STYLE, BUTTON_SECONDARY_STYLE, BUTTON_TERTIARY_STYLE,
                                    GROUP_STYLE, TABLE_STYLE, LABEL_STYLE)
+from controllers.material_controller import MaterialController
+from controllers.movimiento_controller import MovimientoController
+from PyQt6.QtWidgets import QMessageBox
 
 class EntradaMaterialView(QWidget):
     """Vista para registro de entrada de materiales"""
@@ -56,60 +59,53 @@ class EntradaMaterialView(QWidget):
         
         # Campos del formulario
         self.codigo_input = QLineEdit()
-        self.codigo_input.setText("...") 
-        self.codigo_input.setReadOnly(True) 
+        self.codigo_input.setText("...")
+        self.codigo_input.setReadOnly(True)
         
-        self.nombre_input = QLineEdit()
-        self.nombre_input.setPlaceholderText("Nombre del material")
+        self.material_nombre_label = QLabel("-")
+        self.material_nombre_label.setStyleSheet(INPUT_STYLE)
+        self.material_nombre_label.setMinimumHeight(28)
+        self.material_nombre_label.setMaximumHeight(28)
+        self.material_nombre_label.setFrameShape(QLabel.Shape.Panel)
+        self.material_nombre_label.setFrameShadow(QLabel.Shadow.Sunken)
+        self.material_nombre_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         self.cantidad_input = QSpinBox()
         self.cantidad_input.setRange(1, 10000)
         self.cantidad_input.setValue(1)
-        
-        self.unidad_combo = QComboBox()
-        self.unidad_combo.addItems(["Unidades", "Metros", "Kilogramos", "Litros", "Cajas"])
-        
-        self.proveedor_input = QLineEdit()
-        self.proveedor_input.setPlaceholderText("Nombre del proveedor")
+        self.cantidad_input.setEnabled(False)  # Solo habilitado tras validar código
         
         self.fecha_input = QDateEdit()
         self.fecha_input.setDate(QDate.currentDate())
         self.fecha_input.setCalendarPopup(True)
+        self.fecha_input.setEnabled(False)
         
         self.observaciones_input = QTextEdit()
         self.observaciones_input.setPlaceholderText("Observaciones adicionales...")
         self.observaciones_input.setMaximumHeight(60)
         self.observaciones_input.setMinimumHeight(60)
+        self.observaciones_input.setEnabled(False)
         
         # Aplicar estilos
         self.codigo_input.setStyleSheet(INPUT_STYLE)
-        self.nombre_input.setStyleSheet(INPUT_STYLE)
-        self.proveedor_input.setStyleSheet(INPUT_STYLE)
         self.observaciones_input.setStyleSheet(INPUT_STYLE)
         self.cantidad_input.setStyleSheet(SPINBOX_STYLE)
-        self.unidad_combo.setStyleSheet(COMBO_STYLE)
         self.fecha_input.setStyleSheet(DATE_STYLE)
         
         # Crear labels manualmente con estilos
-        codigo_label = QLabel("Código:")
+        codigo_label = QLabel("Código de Barras:")
         nombre_label = QLabel("Nombre del Material:")
         cantidad_label = QLabel("Cantidad:")
-        unidad_label = QLabel("Unidad de Medida:")
-        proveedor_label = QLabel("Proveedor:")
         fecha_label = QLabel("Fecha de Ingreso:")
         observaciones_label = QLabel("Observaciones:")
         
-        # Aplicar estilos a todos los labels
-        for label in [codigo_label, nombre_label, cantidad_label, unidad_label, 
-                     proveedor_label, fecha_label, observaciones_label]:
+        for label in [codigo_label, nombre_label, cantidad_label, fecha_label, observaciones_label]:
             label.setStyleSheet(LABEL_STYLE)
         
         # Agregar campos al formulario con labels estilizados
         form_layout.addRow(codigo_label, self.codigo_input)
-        form_layout.addRow(nombre_label, self.nombre_input)
+        form_layout.addRow(nombre_label, self.material_nombre_label)
         form_layout.addRow(cantidad_label, self.cantidad_input)
-        form_layout.addRow(unidad_label, self.unidad_combo)
-        form_layout.addRow(proveedor_label, self.proveedor_input)
         form_layout.addRow(fecha_label, self.fecha_input)
         form_layout.addRow(observaciones_label, self.observaciones_input)
         
@@ -141,6 +137,7 @@ class EntradaMaterialView(QWidget):
             }
         """)
         functions_layout.addWidget(self.btn_registrar)
+        self.btn_registrar.clicked.connect(self.on_registrar_entrada)
         
         # Botón Escanear Código de Barras
         self.btn_escanear = QPushButton("Escanear Código")
@@ -188,28 +185,47 @@ class EntradaMaterialView(QWidget):
         recent_layout = QVBoxLayout(recent_group)
         
         self.table_entradas = QTableWidget()
-        self.table_entradas.setColumnCount(6)
+        self.table_entradas.setColumnCount(4)
         self.table_entradas.setHorizontalHeaderLabels([
-            "Fecha", "Código", "Material", "Cantidad", "Proveedor", "Usuario"
+            "Fecha", "Material", "Código", "Cantidad"
         ])
         self.table_entradas.setStyleSheet(TABLE_STYLE)
-        
+
         recent_layout.addWidget(self.table_entradas)
         main_layout.addWidget(recent_group)
+        # Cargar entradas recientes al iniciar la vista
+        self.load_entradas_recientes()
     
+    def load_entradas_recientes(self):
+        """Carga los movimientos de tipo entrada recientes en la tabla (Fecha, Material, Código)."""
+        try:
+            self.table_entradas.setRowCount(0)
+            movimientos = MovimientoController.get_all_movimientos()
+            if not movimientos:
+                return
+            entradas = [m for m in movimientos if m.get("tipo_movimiento") == "entrada"]
+            for i, entrada in enumerate(entradas):
+                self.table_entradas.insertRow(i)
+                self.table_entradas.setItem(i, 0, QTableWidgetItem(str(entrada.get("fecha", "") or "")))
+                self.table_entradas.setItem(i, 1, QTableWidgetItem(str(entrada.get("material_nombre", "") or "")))
+                self.table_entradas.setItem(i, 2, QTableWidgetItem(str(entrada.get("material_codigo", "") or "")))
+                self.table_entradas.setItem(i, 3, QTableWidgetItem(str(entrada.get("cantidad", "") or "")))
+            # Ajustar columnas
+            self.table_entradas.resizeColumnsToContents()
+            self.table_entradas.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        except Exception as e:
+            print(f"Error al cargar entradas recientes: {e}")
+
     def clear_form(self):
         """Limpia todos los campos del formulario"""
         # Resetear código a estado inicial
         self.codigo_input.setText("...")
         
         # Limpiar campos de texto
-        self.nombre_input.clear()
-        self.proveedor_input.clear()
         self.observaciones_input.clear()
         
         # Resetear campos numéricos y desplegables
         self.cantidad_input.setValue(1)  
-        self.unidad_combo.setCurrentIndex(0) 
         
         # Resetear fecha a la actual
         self.fecha_input.setDate(QDate.currentDate())
@@ -224,6 +240,68 @@ class EntradaMaterialView(QWidget):
             barcode = scanner_dialog.get_barcode()
             if barcode:
                 self.codigo_input.setText(barcode)
+                # Validar código en la base de datos
+                material = MaterialController.get_material_by_code(barcode)
+                if material:
+                    self.material_nombre_label.setText(material.get("nombre", "-"))
+                    self.cantidad_input.setEnabled(True)
+                    self.fecha_input.setEnabled(True)
+                    self.observaciones_input.setEnabled(True)
+                    self.codigo_input.setProperty("material_id", material.get("id"))
+                else:
+                    self.material_nombre_label.setText("-")
+                    self.cantidad_input.setEnabled(False)
+                    self.fecha_input.setEnabled(False)
+                    self.observaciones_input.setEnabled(False)
+                    self.codigo_input.setProperty("material_id", None)
+                    QMessageBox.warning(self, "Código no registrado", "El código de barras no está registrado en la base de datos.")
+    
+    def on_registrar_entrada(self):
+        """Valida y registra la entrada de material"""
+        material_id = self.codigo_input.property("material_id")
+        if not material_id:
+            QMessageBox.warning(self, "Código no válido", "Debe escanear y validar un código de barras registrado.")
+            return
+        try:
+            cantidad = int(self.cantidad_input.value())
+        except Exception:
+            QMessageBox.warning(self, "Cantidad inválida", "Ingrese una cantidad válida.")
+            return
+        fecha = self.fecha_input.date().toString(Qt.DateFormat.ISODate)
+        observaciones = self.observaciones_input.toPlainText().strip()
+        # Obtener id_usuario de la ventana principal
+        id_usuario = None
+        try:
+            main_window = self.window()
+            if hasattr(main_window, 'current_user') and main_window.current_user:
+                id_usuario = main_window.current_user.get('id')
+        except Exception as e:
+            print(f"Error al obtener usuario: {e}")
+        if not id_usuario:
+            QMessageBox.warning(self, "Error de sesión", "No se pudo obtener el usuario actual. Por favor, inicie sesión nuevamente.")
+            return
+        movimiento = {
+            "id_material": material_id,
+            "id_usuario": id_usuario,
+            "tipo_movimiento": "entrada",
+            "cantidad": cantidad,
+            "fecha": fecha,
+            "observaciones": observaciones
+        }
+        success, msg = MovimientoController.registrar_entrada(movimiento)
+        if success:
+            QMessageBox.information(self, "Entrada registrada", msg)
+            self.clear_form()
+            self.material_nombre_label.setText("-")
+            self.cantidad_input.setEnabled(False)
+            self.fecha_input.setEnabled(False)
+            self.observaciones_input.setEnabled(False)
+            self.codigo_input.setProperty("material_id", None)
+            self.load_entradas_recientes()
+        else:
+            QMessageBox.warning(self, "Error al registrar", msg)
+
+    # La función add_reciente ya no es necesaria, la tabla se llena con load_entradas_recientes
 
 class BarcodeScannerDialog(QDialog):
     """Modal para escanear códigos de barras"""
