@@ -233,10 +233,15 @@ def add_new_fields_to_materials():
             db.fetch_one("SELECT stock_minimo FROM materiales LIMIT 1")
             print("El campo 'stock_minimo' ya existe en la tabla materiales.")
         except:
-            # Si no existe, agregarla
             db.execute_query("ALTER TABLE materiales ADD COLUMN stock_minimo REAL DEFAULT 0")
             print("Campo 'stock_minimo' añadido correctamente a la tabla materiales.")
-        
+        # Verificar si la columna estado ya existe
+        try:
+            db.fetch_one("SELECT estado FROM materiales LIMIT 1")
+            print("El campo 'estado' ya existe en la tabla materiales.")
+        except:
+            db.execute_query("ALTER TABLE materiales ADD COLUMN estado TEXT DEFAULT 'activo'")
+            print("Campo 'estado' añadido correctamente a la tabla materiales.")
         return True
     except Exception as e:
         print(f"Error al modificar la tabla materiales: {str(e)}")
